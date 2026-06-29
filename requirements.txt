@@ -1,0 +1,7 @@
+pandas>=2.2.0
+numpy>=1.26.0
+yfinance>=0.2.40
+finance-datareader>=0.9.90
+opendartreader>=0.2.3
+python-dotenv>=1.0.1
+requests>=2.31.0
