@@ -1849,7 +1849,7 @@ def html_table_with_options(
     # (text-align, padding, border); font-size, vertical-align, overflow-wrap,
     # and header background live once in the <style> block - Gmail clips
     # messages over ~102KB, so per-cell style repetition matters.
-    cell_base = "text-align:left;padding:8px;border:1px solid #d8dee6"
+    cell_base = "text-align:left;padding:8px;border:1px solid #c9d9ea"
     colgroup = ""
     if len(headers) > 0:
         pct = 100.0 / len(headers)
@@ -1949,7 +1949,7 @@ def render_quarterly_financials(rows: List[QuarterlyFinancialRow], source: Optio
             format_number(row.operating_cash_flow),
             format_number(row.free_cash_flow),
         ])
-        row_styles.append("font-weight:bold;background:#edf1f5" if row.period == "FY" else None)
+        row_styles.append("font-weight:bold;background:#dbe8f6" if row.period == "FY" else None)
         index += 1
     return html_table_with_options(
         ["Period", "Revenue", "EBIT", "Net Income", "Operating CF", "Free Cash Flow"],
@@ -2340,8 +2340,8 @@ def build_email_html(
     h3 {{ margin-bottom: 8px; font-size: 18px; }}
     h4 {{ margin: 18px 0 8px; font-size: 14px; text-transform: uppercase; color: #46515c; letter-spacing: .03em; }}
     table {{ width: 100%; table-layout: fixed; border-collapse: collapse; margin: 8px 0 16px; font-size: 13px; }}
-    th, td {{ border: 1px solid #d8dee6; padding: 8px; text-align: left; vertical-align: top; overflow-wrap: break-word; font-size: 13px; }}
-    th {{ background: #edf1f5; color: #182026; }}
+    th, td {{ border: 1px solid #c9d9ea; padding: 8px; text-align: left; vertical-align: top; overflow-wrap: break-word; font-size: 13px; }}
+    th {{ background: #1f4e79; color: #ffffff; }}
     a {{ color: #0958a5; text-decoration: none; }}
     .subtitle {{ color: #5d6975; margin: 0 0 18px; }}
     .stock {{ border: 1px solid #d8dee6; border-radius: 8px; padding: 16px; margin: 14px 0; background: #ffffff; }}
