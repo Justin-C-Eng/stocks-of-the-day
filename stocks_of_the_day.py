@@ -1842,32 +1842,31 @@ def html_table_with_options(
     headers: Sequence[str],
     rows: Sequence[Sequence[str]],
     source: Optional[str] = None,
-    row_styles: Optional[Sequence[Optional[str]]] = None,
+    row_classes: Optional[Sequence[Optional[str]]] = None,
 ) -> str:
-    # All cells are left-aligned and every column gets an equal share of the
-    # table width. Inline only what email clients must see per-cell
-    # (text-align, padding, border); font-size, vertical-align, overflow-wrap,
-    # and header background live once in the <style> block - Gmail clips
-    # messages over ~102KB, so per-cell style repetition matters.
-    cell_base = "text-align:left;padding:8px;border:1px solid #c9d9ea"
+    # All cell styling (alignment, padding, borders, header colors, row
+    # accents) lives once in the email's <style> block; cells carry at most a
+    # class name. Gmail clips messages over ~102KB, and repeating the cell
+    # style inline on every cell previously pushed the full email past that
+    # limit, truncating tables mid-row.
     colgroup = ""
     if len(headers) > 0:
         pct = 100.0 / len(headers)
         colgroup = "".join(f"<col style='width:{pct:.2f}%'>" for _ in headers)
 
-    head = "".join(f"<th style='{cell_base}'>{html.escape(header)}</th>" for header in headers)
+    head = "".join(f"<th>{html.escape(header)}</th>" for header in headers)
     body_rows = []
     for row_idx, row in enumerate(rows):
-        row_extra = ""
-        if row_styles is not None and row_idx < len(row_styles) and row_styles[row_idx]:
-            row_extra = ";" + row_styles[row_idx]
+        row_attr = ""
+        if row_classes is not None and row_idx < len(row_classes) and row_classes[row_idx]:
+            row_attr = f" class='{row_classes[row_idx]}'"
         if len(row) == 1 and len(headers) > 1:
             # Single-cell row spans the full table width (e.g. collapsed
             # "quarterly breakdown unavailable" rows).
-            cells = [f"<td colspan='{len(headers)}' style=\"{cell_base}{row_extra}\">{row[0]}</td>"]
+            cells = [f"<td colspan='{len(headers)}'>{row[0]}</td>"]
         else:
-            cells = [f"<td style=\"{cell_base}{row_extra}\">{cell}</td>" for cell in row]
-        body_rows.append("<tr>" + "".join(cells) + "</tr>")
+            cells = [f"<td>{cell}</td>" for cell in row]
+        body_rows.append(f"<tr{row_attr}>" + "".join(cells) + "</tr>")
     body = "".join(body_rows)
     table_html = (
         "<table>"
@@ -1885,7 +1884,7 @@ def render_market_summary(rows: List[MarketSummaryRow]) -> str:
     for row in rows:
         close = format_number(row.close)
         daily_change = change_cell_html(row.pct_change)
-        date_str = html.escape(str(row.close_date.date()) if row.close_date is not None else "N/A")
+        date_str = html.escape(row.close_date.strftime("%y-%m-%d") if row.close_date is not None else "N/A")
         if getattr(row, "changes", None):
             ch = row.changes
             weekly = change_cell_html(ch.get("weekly"))
@@ -1920,7 +1919,7 @@ def render_quarterly_financials(rows: List[QuarterlyFinancialRow], source: Optio
     if not rows:
         return "<p class='muted'>Quarterly financials unavailable.</p>"
     rows_out = []
-    row_styles = []
+    row_classes = []
     index = 0
     while index < len(rows):
         row = rows[index]
@@ -1937,7 +1936,7 @@ def render_quarterly_financials(rows: List[QuarterlyFinancialRow], source: Optio
             if run_end > index:
                 label = f"{row.period}–{rows[run_end].period} {row.fiscal_year}: quarterly breakdown unavailable"
                 rows_out.append([html.escape(label)])
-                row_styles.append("color:#697581")
+                row_classes.append("muted")
                 index = run_end + 1
                 continue
         period_label = f"FY {row.fiscal_year}" if row.period == "FY" else f"{row.fiscal_year} {row.period}"
@@ -1949,13 +1948,13 @@ def render_quarterly_financials(rows: List[QuarterlyFinancialRow], source: Optio
             format_number(row.operating_cash_flow),
             format_number(row.free_cash_flow),
         ])
-        row_styles.append("font-weight:bold;background:#dbe8f6" if row.period == "FY" else None)
+        row_classes.append("fy" if row.period == "FY" else None)
         index += 1
     return html_table_with_options(
         ["Period", "Revenue", "EBIT", "Net Income", "Operating CF", "Free Cash Flow"],
         rows_out,
         source=source,
-        row_styles=row_styles,
+        row_classes=row_classes,
     )
 
 
@@ -2342,6 +2341,7 @@ def build_email_html(
     table {{ width: 100%; table-layout: fixed; border-collapse: collapse; margin: 8px 0 16px; font-size: 13px; }}
     th, td {{ border: 1px solid #c9d9ea; padding: 8px; text-align: left; vertical-align: top; overflow-wrap: break-word; font-size: 13px; }}
     th {{ background: #1f4e79; color: #ffffff; }}
+    tr.fy {{ font-weight: bold; background: #dbe8f6; }}
     a {{ color: #0958a5; text-decoration: none; }}
     .subtitle {{ color: #5d6975; margin: 0 0 18px; }}
     .stock {{ border: 1px solid #d8dee6; border-radius: 8px; padding: 16px; margin: 14px 0; background: #ffffff; }}
