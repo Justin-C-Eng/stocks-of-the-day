@@ -6,10 +6,12 @@ name: Stocks of the Day - Daily Run
 
 on:
   schedule:
-    # 22:00 UTC = 07:00 KST / 09:00 JST. GitHub Actions cron uses 5 fields:
-    # minute hour day-of-month month day-of-week. Scheduled runs can be
-    # delayed by a few minutes during GitHub-wide load; this is normal.
+    # 22:00 UTC = 07:00 KST (morning email), 09:00 UTC = 18:00 KST (evening
+    # email). GitHub Actions cron uses 5 fields: minute hour day-of-month
+    # month day-of-week. Scheduled runs can be delayed by a few minutes
+    # during GitHub-wide load; this is normal.
     - cron: '0 22 * * *'
+    - cron: '0 9 * * *'
   workflow_dispatch: {}
 
 # Cancel a still-running previous invocation instead of piling up runs if a
