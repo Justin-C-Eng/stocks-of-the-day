@@ -41,7 +41,7 @@ jobs:
           # Keep in sync with the interpreter used for local development. If a
           # future dependency requires 3.12+, bump this and re-test locally
           # first (see the OpenDartReader note in the install step below).
-          python-version: '3.11'
+          python-version: '3.13'
 
       - name: Restore pick-history database from cache
         # picks.db accumulates each day's picks for the "Previous Picks
