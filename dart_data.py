@@ -18,10 +18,16 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import pandas as pd
 
+# The GitHub-source install exposes the module as "OpenDartReader", but the
+# PyPI wheels (>=0.3) ship the same code under the lowercase package name
+# "opendartreader". Accept either so both install paths work.
 try:
     import OpenDartReader  # type: ignore[import-untyped]
 except Exception:  # pragma: no cover - handled by caller
-    OpenDartReader = None
+    try:
+        import opendartreader as OpenDartReader  # type: ignore[import-untyped]
+    except Exception:
+        OpenDartReader = None
 
 LOGGER = logging.getLogger("stocks_of_the_day.dart")
 

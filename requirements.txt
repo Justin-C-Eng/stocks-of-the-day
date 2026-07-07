@@ -2,9 +2,10 @@ pandas>=2.2.0
 numpy>=1.26.0
 yfinance>=0.2.40
 finance-datareader>=0.9.90
-# NOTE: the opendartreader 0.2.3 sdist on PyPI declares python_requires>=3.13 and
-# installs with a broken flat layout on older interpreters; on Python <3.13 install
-# it from GitHub instead: pip install git+https://github.com/FinanceData/OpenDartReader
+# NOTE: PyPI opendartreader requires Python >=3.13 and its wheels ship the
+# package under the lowercase module name "opendartreader" (the GitHub source
+# uses "OpenDartReader"); the code accepts either module name. On Python <3.13
+# install from GitHub: pip install git+https://github.com/FinanceData/OpenDartReader
 opendartreader>=0.2.3
 anthropic>=0.40.0
 python-dotenv>=1.0.1

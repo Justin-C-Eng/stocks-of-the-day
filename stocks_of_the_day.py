@@ -50,10 +50,15 @@ try:
 except ImportError:  # pragma: no cover - handled at runtime with a clear log
     fdr = None
 
+# GitHub-source installs expose the module as "OpenDartReader"; PyPI wheels
+# (>=0.3) ship the same code under the lowercase name "opendartreader".
 try:
     import OpenDartReader  # type: ignore[import-untyped]
 except ImportError:  # pragma: no cover - handled at runtime with a clear log
-    OpenDartReader = None
+    try:
+        import opendartreader as OpenDartReader  # type: ignore[import-untyped]
+    except ImportError:
+        OpenDartReader = None
 
 try:
     import anthropic
@@ -65,11 +70,18 @@ from sec_data import SecClient
 
 # cached Dart client instance
 _DART_CLIENT: Optional[DartClient] = None
+_DART_SKIP_LOGGED = False
 
 
 def get_dart_client(config: AppConfig) -> Optional[DartClient]:
-    global _DART_CLIENT
+    global _DART_CLIENT, _DART_SKIP_LOGGED
     if not config.dart_api_key or OpenDartReader is None:
+        # Log the reason once per run; a silent None here would make every
+        # DART consumer quietly fall back to yfinance with no trace.
+        if not _DART_SKIP_LOGGED:
+            reason = "DART_API_KEY not set" if not config.dart_api_key else "OpenDartReader import failed"
+            LOGGER.warning("DART disabled (%s); Korean financials will fall back to yfinance.", reason)
+            _DART_SKIP_LOGGED = True
         return None
     if _DART_CLIENT is None:
         _DART_CLIENT = DartClient(config.dart_api_key, call_delay=config.dart_call_delay_seconds)
