@@ -1,5 +1,10 @@
 .env
 .venv/
+.venv-broken/
+picks.db
+last_failure.log
+scheduler.log
+docs_cache/
 __pycache__/
 *.pyc
 *.pyo
