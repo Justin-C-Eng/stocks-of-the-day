@@ -1,0 +1,151 @@
+name: Stocks of the Day - Daily Run
+
+# Runs the daily stock-picking/email pipeline on a schedule, and on demand for
+# manual testing. See GITHUB_ACTIONS_SETUP.md for the one-time secrets setup
+# required before this workflow can run successfully.
+
+on:
+  schedule:
+    # 22:00 UTC = 07:00 KST / 09:00 JST. GitHub Actions cron uses 5 fields:
+    # minute hour day-of-month month day-of-week. Scheduled runs can be
+    # delayed by a few minutes during GitHub-wide load; this is normal.
+    - cron: '0 22 * * *'
+  workflow_dispatch: {}
+
+# Cancel a still-running previous invocation instead of piling up runs if a
+# prior day's job is somehow still in flight when the next trigger fires.
+concurrency:
+  group: stocks-daily
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  run-pipeline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # date.today() in the pipeline (used for the email subject date and the
+      # "data as of" cutoff) reads the system local time, so this must be set
+      # for the report to reflect the KST trading day rather than the UTC one.
+      TZ: Asia/Seoul
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          # Keep in sync with the interpreter used for local development. If a
+          # future dependency requires 3.12+, bump this and re-test locally
+          # first (see the OpenDartReader note in the install step below).
+          python-version: '3.11'
+
+      - name: Restore pick-history database from cache
+        # picks.db accumulates each day's picks for the "Previous Picks
+        # Review" email section. GitHub-hosted runners are ephemeral and the
+        # file is intentionally gitignored, so actions/cache is used as the
+        # persistence layer across runs: every run saves under a unique key
+        # (the run id) and restores from the most recent prior key via the
+        # restore-keys prefix match.
+        uses: actions/cache/restore@v4
+        with:
+          path: picks.db
+          key: picks-db-${{ github.run_id }}
+          restore-keys: |
+            picks-db-
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # requirements.txt notes that the opendartreader 0.2.3 sdist on PyPI
+          # declares python_requires>=3.13 and installs with a broken flat
+          # layout on earlier interpreters. This workflow runs Python 3.11,
+          # so install everything else from requirements.txt normally and
+          # pull opendartreader from GitHub source instead.
+          grep -v '^opendartreader' requirements.txt > /tmp/requirements-base.txt
+          pip install -r /tmp/requirements-base.txt
+          pip install git+https://github.com/FinanceData/OpenDartReader
+
+      - name: Write .env from repository secrets
+        # Secrets are injected into a gitignored .env consumed by
+        # python-dotenv, never echoed or committed. The heredoc delimiter is
+        # single-quoted ('EOF') so bash does not perform parameter/command
+        # substitution on secret values while building the file - a secret
+        # value that happened to contain "$(...)" or a backtick must never be
+        # executed as a shell command.
+        run: |
+          cat > .env << 'EOF'
+          DART_API_KEY=${{ secrets.DART_API_KEY }}
+          NEWSAPI_KEY=${{ secrets.NEWSAPI_KEY }}
+          NAVER_CLIENT_ID=${{ secrets.NAVER_CLIENT_ID }}
+          NAVER_CLIENT_SECRET=${{ secrets.NAVER_CLIENT_SECRET }}
+          ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_MODEL=${{ secrets.ANTHROPIC_MODEL || 'claude-haiku-4-5' }}
+          GMAIL_USER=${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD=${{ secrets.GMAIL_APP_PASSWORD }}
+          EMAIL_FROM=${{ secrets.GMAIL_USER }}
+          EMAIL_TO=${{ secrets.EMAIL_TO }}
+          SEC_CONTACT_NAME=${{ secrets.SEC_CONTACT_NAME }}
+          SEC_CONTACT_EMAIL=${{ secrets.SEC_CONTACT_EMAIL }}
+          PICKS_DB_PATH=picks.db
+          # GitHub Actions itself is the scheduler for this workflow, so the
+          # script's own internal scheduler and test loop must stay off, and
+          # DRY_RUN off so the email actually sends.
+          SCHEDULER_ENABLED=false
+          TEST_RUN=false
+          DRY_RUN=false
+          EOF
+
+      - name: Run stocks-of-the-day pipeline
+        id: run_pipeline
+        # continue-on-error lets the cache-save/log-upload/cleanup steps
+        # below still run on failure; the final "Report pipeline result" step
+        # re-fails the job based on this step's outcome so overall job status
+        # is still accurate.
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          python stocks_of_the_day.py 2>&1 | tee stocks_of_the_day.log
+
+      - name: Save pick-history database to cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: picks.db
+          key: picks-db-${{ github.run_id }}
+
+      - name: Upload run log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stocks-of-the-day-log
+          path: stocks_of_the_day.log
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Remove generated .env
+        if: always()
+        run: rm -f .env
+
+      - name: Report pipeline result
+        if: always()
+        run: |
+          if [ "${{ steps.run_pipeline.outcome }}" = "success" ]; then
+            echo "Pipeline succeeded."
+          else
+            echo "Pipeline failed. The pipeline's own alert email should have been sent (unless SMTP itself was broken - check the uploaded log artifact in that case)."
+            exit 1
+          fi
+
+# --- Rate limits (informational; the pipeline's own retry/delay logic already
+# respects these for a single daily run) ---
+# DART: 100 calls/day on the free tier; this pipeline makes roughly 10-20 per
+#   run. If the stock universe grows, keep total calls per run under ~80.
+# SEC EDGAR: fair-access policy recommends <=10 requests/sec; the SEC client
+#   enforces spacing between calls.
+# NewsAPI: 100 requests/day on the free plan; this pipeline makes ~6 (3 US +
+#   3 KR stocks).
+# Naver News: 25,000 calls/day; comfortably within limits.
